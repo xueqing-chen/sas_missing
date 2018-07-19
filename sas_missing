@@ -1,0 +1,61 @@
+
+
+%MACRO  missing(InputVar_List=,Input_DSN=,target= );
+
+		%LET i =1;
+		%DO %WHILE (%SCAN(&InputVar_List, &i) NE );
+				%GLOBAL InputVar&i;
+				%LET InputVar&i = %SCAN(&InputVar_List, &i);
+				%LET i = %EVAL(&i+ 1);		
+		%END;
+		%GLOBAL InputVarCnt;
+		%LET InputVarCnt = %EVAL(&i - 1);
+
+		*total observations;
+	%GLOBAL All_Obs_Cnt;
+	DATA _NULL_;
+			SET &Input_DSN(KEEP=&Target) NOBS=temp_x;
+			IF _N_ = 1 THEN CALL SYMPUT("All_Obs_Cnt", TRIM(LEFT(temp_x)));
+	RUN;		
+	%LET All_Obs_Cnt = &All_Obs_Cnt;
+	
+*3. binning the Input variable list one by one;	
+	%LET k=1;
+	%DO k=1 %TO &InputVarCnt;
+			PROC SQL NOPRINT;
+					*Missing Value check;	
+					%LET MissXvar_Cnt = 0;					
+										
+					*count missing values;
+					SELECT COUNT(*) INTO :MissXvar_Cnt FROM &Input_DSN WHERE &&InputVar&k IS MISSING;				
+					%LET MissXvar_Cnt =&MissXvar_Cnt;					
+					
+					*check whether the missing input observation > allowed missing part;
+					
+/*							%RETURN;*/
+
+			/*save the missing var	---add by jby on 20150826*/
+							data temp_missing_var;
+							length missing_var $100.;
+							missing_var="&&InputVar&k";
+							missing_obs=&MissXvar_Cnt;
+							tot_obs=&All_Obs_Cnt;
+							missing_percentage=&MissXvar_Cnt/&All_Obs_Cnt;
+							
+							run;
+
+							%if %SYSFUNC(exist(output_missing_var))=1 %then %do;
+							proc append base=output_missing_var  data=temp_missing_var; run; 
+							%end;
+							%else %do;
+							data output_missing_var;
+							set temp_missing_var;
+							run;
+							%end;
+
+
+					%END;								
+				
+			QUIT;
+			
+%mend;
